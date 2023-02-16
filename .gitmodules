@@ -1,3 +1,4 @@
 [submodule "mtg-proxies-backend"]
 	path = mtg-proxies-backend
 	url = https://github.com/Gotmarsec/mtg-proxies-backend.git
+	branch = master
