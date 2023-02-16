@@ -1,6 +1,6 @@
 from flask import Flask, Response, request, make_response, render_template, redirect, url_for
 import importlib
-mtg_print = importlib.import_module("mtg-proxies.print")
+mtg_print = importlib.import_module("mtg-proxies-backend.print")
 from multiprocessing import Process
 from multiprocessing import Pipe
 import secrets
