@@ -1,0 +1,78 @@
+<!--  how to use css in python_ flask-->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+    <!--  Load CSS in Flask with html-->
+        <link rel="stylesheet" href='/staticFiles/main.css' />
+    </head>
+    <body>
+        <h1>Magic the Gathering Proxy Generator</h1>
+        <p>Generate ultra high-res, ready to print proxies for magic!</p>
+        <!-- form class="logicForm" method="post" action="/" -->
+        <div class="logicForm">
+            <textarea id="decklistTA" name="Decklist" cols="60" rows="30"></textarea>
+            <progress id="statusPB" value="0" min="0" max="100"></progress>
+            <textarea readonly id="statusTA" name="Status" cols="60" rows="10"></textarea>
+            <script>
+                async function generatePdf() {
+                    document.getElementById("statusTA").value = "";
+                    const rawResponse = await fetch('/generatePdf', {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        method: 'POST',
+                        body: JSON.stringify({
+                            'cards': document.getElementById("decklistTA").value,
+                            'hSpace': document.getElementById("hSpaceTF").value,
+                            'vSpace': document.getElementById("vSpaceTF").value,
+                            'dpi': document.getElementById("dpiTF").value,
+                            'intelligentBackground': document.getElementById("intelligentBackgroundCB").checked,
+                            'cropmarks': document.getElementById("cropmarksCB").checked
+                        })
+                    });
+                    const content = await rawResponse.json();
+
+                    console.log(content);
+                }
+                async function downloadPdf() {
+                    const rawResponse = await fetch('/downloadPdf')
+                        .then(response => response.json())  
+                        .then(json => console.log(json));
+                }
+                function init() {
+                    document.getElementById("statusTA").value = "";
+                    document.getElementById("downloadBtn").disabled = true;
+                }
+                window.onload = init;
+                var eventSource = new EventSource("/stream")
+                eventSource.onmessage = function(e) {
+                    let message = e.data.split(/:(.*)/s);
+                    if (message[0] === "message") {
+                        document.getElementById("statusTA").value += message[1] + "\n";
+                    } else if (message[0] === "progress") {
+                        document.getElementById("statusPB").value = parseInt(message[1]);
+                    } else if (message[0] === "complete" && message[1] === "true" ) {
+                        document.getElementById("downloadBtn").disabled = false;
+                    }
+                };
+            </script>
+            <label id="hSpaceLabel">Horizontal spacing</label>
+            <input id="hSpaceTF" type="text" name="hSpaceTF">
+            <label id="vSpaceLabel">Vertical spacing</label>
+            <input id="vSpaceTF" type="text" name="vSpaceTF"> 
+            <label id="dpiLabel">DPI</label>
+            <input id="dpiTF" type="text" name="dpiTF"> 
+            <input id="intelligentBackgroundCB" type="checkbox" name="intelligentBackground">
+            <label id="intelligentBackgroundLabel" for="intelligentBackground"> Intelligent background</label><br>
+            <input id="cropmarksCB" type="checkbox" name="cropmarks">
+            <label id="cropmarksLabel" for="cropmarks"> Cropmarks</label><br>
+            <!-- input id="generateBtn" type="submit" value="Generate" name="Generate"/ -->
+            <button id="generateBtn" onclick=generatePdf()>Generate</button>
+            <form id="downloadForm" method="post" action="/downloadPdf">
+                <!-- input id="downloadBtn" class="buttons" type="submit" value="Download pdf file" name="Download pdf file"/ -->
+            </form>
+            <button disabled id="downloadBtn" type="submit" form="downloadForm">Download pdf file</button>
+            <!-- button id="downloadBtn" onclick=downloadPdf()>Download pdf file</button -->
+        </div>
+    </body>
+</html>
