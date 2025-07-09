@@ -1,14 +1,19 @@
 from flask import Flask, Response, request, make_response, render_template, redirect, url_for
 import importlib
 mtg_print = importlib.import_module("mtg-proxies-backend.print")
-from multiprocessing import Process
-from multiprocessing import Pipe
+#from multiprocessing import Process
+#from multiprocessing import Pipe
+import multiprocessing
 import secrets
 
 
 app = Flask(__name__, template_folder='templateFiles', static_folder='staticFiles')
 
-conn1, conn2 = Pipe()
+
+MAX_WORKERS = 3
+workers = []
+####conn1, conn2 = multiprocessing.Pipe()
+queue = multiprocessing.Queue()
 
 def get_message(connection):
     '''this could be any function that blocks until data is ready'''
@@ -23,11 +28,12 @@ def get_message(connection):
         s = ["",""]
     return s
 
-def genPdfAsync(args, filename, conn1, conn2):
+def genPdfAsync(args, filename, queue, task_done_event):
     #pdf = bytes(str(mtg_print.genPdf(args, conn2).output(dest='S'), 'latin-1'), 'latin-1')
-    mtg_print.genPdf(args, conn2).output('/mnt/Storage/Share/' + filename)
-    conn1.close()
-    conn2.close()
+    mtg_print.genPdf(args, queue).output('./' + filename)
+####    conn1.close()
+####    conn2.close()
+    task_done_event.set()
 #    return pdf
 
 @app.route('/generatePdf', methods=["GET", "POST"])
@@ -38,7 +44,7 @@ def generatePdf():
     if request.method == "POST":
         data = request.get_json()
 
-        conn1, conn2 = Pipe()
+        conn1, conn2 = multiprocessing.Pipe()
         intelligentBackground = '--no-intelligent_background'
         cropmarks = '--no-cropmarks'
         hSpace = 0
@@ -70,12 +76,20 @@ def generatePdf():
                 pass
 
         print("dpi: " + str(dpi))
-        args=['--border_crop', '0', '--dpi', str(dpi), intelligentBackground, cropmarks, '--directInput', '--directOutput', decklist, './testprint.pdf']
+        args=['--border_crop', '0', '--dpi', str(dpi), intelligentBackground, cropmarks, '--directInput', '--directOutput', '--hSpace', str(hSpace), '--vSpace', str(vSpace), decklist, './testprint.pdf']
 
         filename = 'print_' + request.cookies.get('token') + '.pdf'
 
-        pdfProcess = Process(target=genPdfAsync, args=(args, filename, conn1, conn2))
-        pdfProcess.start()
+        for worker_process, task_done_event in workers:
+            if task_done_event.is_set():
+                task_done_event.clear()
+                workers.remove((worker_process, task_done_event))
+
+        if len(workers) < MAX_WORKERS:
+            task_done_event = multiprocessing.Event()
+            pdfProcess = multiprocessing.Process(target=genPdfAsync, args=(args, filename, queue, task_done_event))
+            pdfProcess.start()
+            workers.append((pdfProcess, task_done_event))
 
         headers = {
             'Content-Type': 'application/pdf',
@@ -93,7 +107,7 @@ def downloadPdf():
 
     try:
         #pdf_file = open('/mnt/Storage/Share/' + filename, "r", encoding='latin-1')
-        pdf_file = open('/mnt/Storage/Share/' + filename, "rb")
+        pdf_file = open('./' + filename, "rb")
     except FileNotFoundError:
         #response = make_response(render_template("index.html"))
         #return response
@@ -129,7 +143,8 @@ def stream():
     def eventStream():
         while True:
             # wait for source data to be available, then push it
-            data = get_message(conn1)
+####            data = get_message(conn1)
+            data = queue.get(block=True)
             yield 'data: {}\n\n'.format(data[0]+":"+data[1])
     return Response(eventStream(), mimetype="text/event-stream")
 
