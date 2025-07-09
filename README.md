@@ -40,7 +40,7 @@ source venv/bin/activate
 ```bash
 python -m pip install -U Flask
 python -m pip install Numpy
-python -m pip install mtg-proxies-backend
+python -m pip install ./mtg-proxies-backend
 ```
 
 ## Usage
